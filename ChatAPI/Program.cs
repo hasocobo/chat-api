@@ -1,4 +1,4 @@
-using ChatAPI.Hubs;
+using ChatAPI.Presentation.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
