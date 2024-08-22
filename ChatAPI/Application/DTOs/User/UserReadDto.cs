@@ -1,5 +1,6 @@
-namespace ChatAPI.Core.Entities;
-public class User 
+namespace ChatAPI.Application.DTOs.User;
+
+public class UserReadDto
 {
   public int Id { get; set; }
   public required string Username { get; set; }

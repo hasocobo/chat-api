@@ -1,54 +1,44 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
+using System;
+using System.Threading.Tasks;
 
-var connection = new HubConnectionBuilder()
-    .WithUrl("http://localhost:5223/chatHub", options =>
-    {
-        options.HttpMessageHandlerFactory = (message) =>
-        {
-            if (message is HttpClientHandler clientHandler)
-                clientHandler.ServerCertificateCustomValidationCallback +=
-                    (sender, certificate, chain, sslPolicyErrors) => { return true; };
-            return message;
-        };
-    })
-    .WithAutomaticReconnect()
-    .Build();
-
-connection.On<string, string>("ReceiveMessage", (user, message) =>
+class Program
 {
-    Console.WriteLine($"{user}: {message}");
-});
-
-try
-{
-    await connection.StartAsync();
-    Console.WriteLine("Connection started");
-
-    Console.WriteLine("Please enter your name: ");
-    var userName = Console.ReadLine();
-    await connection.InvokeAsync("SetUserId", userName);
-
-
-    while (true)
+    static async Task Main(string[] args)
     {
-        Console.WriteLine("Who do you want to send a message? Press enter if you want to send to everyone, otherwise enter the user name you want to send a message to.");
-        var receiverUserId = Console.ReadLine();
+        var connection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5223/chatHub")
+            .Build();
 
-        if (!string.IsNullOrEmpty(receiverUserId))
+        await connection.StartAsync();
+
+        Console.Write("Enter your username: ");
+        var username = Console.ReadLine();
+
+        await connection.InvokeAsync("SetUsername", username);
+
+        connection.On<string>("ReceiveMessage", message =>
         {
-            Console.WriteLine($"Sending message to {receiverUserId}: ");
-            var message = Console.ReadLine();
-            await connection.InvokeAsync("SendPrivateMessage", receiverUserId, message);
-        }
-        else
+            Console.WriteLine(message);
+        });
+
+        while (true)
         {
-            Console.WriteLine("Sending message to everyone: ");
-            var message = Console.ReadLine();
-            await connection.InvokeAsync("SendMessage", message);
+            var input = Console.ReadLine();
+            if (input.StartsWith("/w "))
+            {
+                var parts = input.Split(' ', 3);
+                if (parts.Length == 3)
+                {
+                    var targetUsername = parts[1];
+                    var message = parts[2];
+                    await connection.InvokeAsync("SendMessageToUser", targetUsername, message);
+                }
+            }
+            else
+            {
+                await connection.InvokeAsync("BroadcastMessage", input);
+            }
         }
     }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"An error occurred: {ex.Message}");
 }

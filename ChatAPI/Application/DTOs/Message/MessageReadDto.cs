@@ -1,5 +1,7 @@
-    namespace ChatAPI.Core.Entities;
-    public class Message
+namespace ChatAPI.Application.DTOs.Message;
+
+
+    public class MessageReadDto
     {
         public int Id { get; set; }
         public required string SenderUsername { get; set; }
