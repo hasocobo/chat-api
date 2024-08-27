@@ -1,71 +1,47 @@
-namespace ChatAPI.Application.Services;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using ChatAPI.Application.Interfaces;
 using ChatAPI.Core.Entities;
-using ChatAPI.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+
+namespace ChatAPI.Application.Services;
 
 public class ChatService : IChatService
 {
-  private readonly AppDbContext _context;
+    private static readonly ConcurrentDictionary<string, string> Users = new();
+    private static readonly ConcurrentDictionary<Guid, Message> Messages = new();
 
-  public ChatService(AppDbContext context)
-  {
-    _context = context;
-  }
-
-  public async Task AddUserAsync(string username, string connectionId)
-  {
-    var user = await _context.Users.Include(u => u.ConnectionIds).FirstOrDefaultAsync(u => u.Username == username);
-
-    if (user == null)
+    public Task AddUser(string username, string connectionId)
     {
-      user = new User { Username = username };
-      _context.Users.Add(user);
+        Users[connectionId] = username;
+        return Task.CompletedTask;
     }
 
-    user.ConnectionIds.Add(new ConnectionId { Connection = connectionId });
-    await _context.SaveChangesAsync();
-  }
-
-  public async Task RemoveUserAsync(string connectionId)
-  {
-    var user = await _context.Users.Include(u => u.ConnectionIds)
-                                   .FirstOrDefaultAsync(u => u.ConnectionIds.Any(c => c.Connection == connectionId));
-
-    if (user != null)
+    public Task<List<Message>> GetAllMessages()
     {
-      user.ConnectionIds.RemoveAll(c => c.Connection == connectionId);
-      if (!user.ConnectionIds.Any())
-      {
-        _context.Users.Remove(user);
-      }
-      await _context.SaveChangesAsync();
+        return Task.FromResult(Messages.Values.ToList());
     }
-  }
 
-  public async Task<string> GetUsernameByConnectionIdAsync(string connectionId)
-  {
-    var user = await _context.Users.Include(u => u.ConnectionIds)
-                                   .FirstOrDefaultAsync(u => u.ConnectionIds.Any(c => c.Connection == connectionId));
-    return user?.Username;
-  }
+    public Task<List<string>> GetConnectionIdsByUsername(string username)
+    {
+        throw new NotImplementedException();
+    }
 
-  public async Task<List<string>> GetConnectionIdsByUsernameAsync(string username)
-  {
-    var user = await _context.Users.Include(u => u.ConnectionIds)
-                                   .FirstOrDefaultAsync(u => u.Username == username);
+    public Task<string> GetUsernameByConnectionId(string connectionId)
+    {
+        Users.TryGetValue(connectionId, out var username);
+        return Task.FromResult(username);
+    }
 
-    return user?.ConnectionIds.Select(c => c.Connection).ToList() ?? new List<string>();
-  }
+    public Task RemoveUser(string connectionId)
+    {
+        Users.TryRemove(connectionId, out _);
+        return Task.CompletedTask;
+    }
 
-  public async Task SaveMessageAsync(Message message)
-  {
-    _context.Messages.Add(message);
-    await _context.SaveChangesAsync();
-  }
-
-  public async Task<List<Message>> GetAllMessagesAsync()
-  {
-    return await _context.Messages.ToListAsync();
-  }
+    public Task SaveMessage(Message message)
+    {
+        Messages[message.Id] = message;
+        return Task.CompletedTask;
+    }
 }
+

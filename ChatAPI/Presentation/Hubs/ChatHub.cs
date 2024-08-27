@@ -1,71 +1,70 @@
-using System.Collections.Concurrent;
-using ChatAPI.Application.Services;
-using ChatAPI.Core.Entities;
+using ChatAPI.Application.Interfaces;
 using Microsoft.AspNetCore.SignalR;
+using ChatAPI.Core.Entities;
 
 namespace ChatAPI.Presentation.Hubs;
 
 public class ChatHub : Hub
 {
-  private readonly ChatService _chatService;
+    private readonly IChatService _chatService;
+    private static int _userCounter = 10000;
 
-  public ChatHub(ChatService chatService)
-  {
-    _chatService = chatService;
-  }
-  public async Task SetUsername(string username)
-  {
-    await _chatService.AddUserAsync(username, Context.ConnectionId);
-    await Clients.All.SendAsync("ReceiveMessage", $"{username} has joined the chat.");
-  }
-
-  public override async Task OnDisconnectedAsync(Exception exception)
-  {
-    var username = await _chatService.GetUsernameByConnectionIdAsync(Context.ConnectionId);
-    await _chatService.RemoveUserAsync(Context.ConnectionId);
-
-    if (username != null)
+    public ChatHub(IChatService chatService)
     {
-      await Clients.All.SendAsync("ReceiveMessage", $"{username} has left the chat.");
+        _chatService = chatService;
     }
 
-    await base.OnDisconnectedAsync(exception);
-  }
-
-  public async Task SendMessageToUser(string targetUsername, string messageContent)
-  {
-    var senderUsername = await _chatService.GetUsernameByConnectionIdAsync(Context.ConnectionId);
-    var targetConnectionIds = await _chatService.GetConnectionIdsByUsernameAsync(targetUsername);
-
-    if (targetConnectionIds != null)
+    public override async Task OnConnectedAsync()
     {
-      var message = new Message
-      {
-        SenderUsername = senderUsername,
-        ReceiverUsername = targetUsername,
-        Content = messageContent
-      };
+        var anonymousName = $"Anonymous#{Interlocked.Increment(ref _userCounter)}";
+        await _chatService.AddUser(anonymousName, Context.ConnectionId);
+        await Clients.Caller.SendAsync("ReceiveMessage", $"You are connected as {anonymousName}.");
 
-      await _chatService.SaveMessageAsync(message);
-
-      foreach (var connectionId in targetConnectionIds)
-      {
-        await Clients.Client(connectionId).SendAsync("ReceiveMessage", $"{senderUsername}: {messageContent}");
-      }
+        await base.OnConnectedAsync();
     }
-  }
 
-  public async Task BroadcastMessage(string messageContent)
-  {
-    var username = await _chatService.GetUsernameByConnectionIdAsync(Context.ConnectionId);
-
-    var message = new Message
+    public async Task JoinGroup(string groupCode)
     {
-      SenderUsername = username,
-      Content = messageContent
-    };
+        await Groups.AddToGroupAsync(Context.ConnectionId, groupCode);
+        await Clients.Group(groupCode).SendAsync("ReceiveMessage", $"{Context.ConnectionId} has joined the group.");
+    }
 
-    await _chatService.SaveMessageAsync(message);
-    await Clients.All.SendAsync("ReceiveMessage", $"{username}: {messageContent}");
-  }
+    public async Task LeaveGroup(string groupCode)
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupCode);
+        await Clients.Group(groupCode).SendAsync("ReceiveMessage", $"{Context.ConnectionId} has left the group.");
+    }
+
+    public async Task SendMessageToGroup(string groupCode, string messageContent)
+    {
+        var username = await _chatService.GetUsernameByConnectionId(Context.ConnectionId);
+
+        if (username != null)
+        {
+            var message = new Message
+            {
+                SenderUsername = username,
+                Content = messageContent,
+                Id = Guid.NewGuid()
+            };
+
+            await _chatService.SaveMessage(message);
+
+            await Clients.Group(groupCode).SendAsync("ReceiveMessage", $"{username}: {message.Content} (ID: {message.Id})");
+        }
+    }
+
+    public override async Task OnDisconnectedAsync(Exception exception)
+    {
+        var username = await _chatService.GetUsernameByConnectionId(Context.ConnectionId);
+        await _chatService.RemoveUser(Context.ConnectionId);
+
+        if (username != null)
+        {
+            await Clients.All.SendAsync("ReceiveMessage", $"{username} has disconnected.");
+        }
+
+        await base.OnDisconnectedAsync(exception);
+    }
 }
+

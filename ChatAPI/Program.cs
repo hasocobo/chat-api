@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ChatAPI.Application.Services;
+using ChatAPI.Application.Interfaces;
 using ChatAPI.Infrastructure.Data;
 using ChatAPI.Presentation.Hubs;
 
@@ -11,7 +12,7 @@ builder.Services.AddSignalR();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseInMemoryDatabase("ChatDb"));
 
-builder.Services.AddScoped<ChatService>();
+builder.Services.AddScoped<IChatService, ChatService>();
 
 var app = builder.Build();
 

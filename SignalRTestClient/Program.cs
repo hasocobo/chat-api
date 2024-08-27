@@ -12,10 +12,11 @@ class Program
 
         await connection.StartAsync();
 
-        Console.Write("Enter your username: ");
-        var username = Console.ReadLine();
 
-        await connection.InvokeAsync("SetUsername", username);
+        Console.Write("Enter group code to join: ");
+        var groupCode = Console.ReadLine();
+
+        await connection.InvokeAsync("JoinGroup", groupCode);
 
         connection.On<string>("ReceiveMessage", message =>
         {
@@ -25,20 +26,7 @@ class Program
         while (true)
         {
             var input = Console.ReadLine();
-            if (input.StartsWith("/w "))
-            {
-                var parts = input.Split(' ', 3);
-                if (parts.Length == 3)
-                {
-                    var targetUsername = parts[1];
-                    var message = parts[2];
-                    await connection.InvokeAsync("SendMessageToUser", targetUsername, message);
-                }
-            }
-            else
-            {
-                await connection.InvokeAsync("BroadcastMessage", input);
-            }
+            await connection.InvokeAsync("SendMessageToGroup", groupCode, input);
         }
     }
 }
